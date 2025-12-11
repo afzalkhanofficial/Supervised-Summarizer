@@ -1,0 +1,6 @@
+Flask==3.1.2
+scikit-learn==1.6.1
+nltk==3.9.1
+PyPDF2==3.0.1
+NumPy==2.0.2
+gunicorn
