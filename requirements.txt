@@ -2,5 +2,8 @@ Flask==3.1.2
 scikit-learn==1.6.1
 nltk==3.9.1
 PyPDF2==3.0.1
-NumPy==2.0.2
-gunicorn
+numpy==2.0.2
+reportlab==4.0.0
+Pillow==9.5.0
+pytesseract==0.3.10
+gunicorn==20.1.0
