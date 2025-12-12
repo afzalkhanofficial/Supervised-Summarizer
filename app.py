@@ -1,20 +1,18 @@
 import os
 import pickle
 import PyPDF2
+import re
 import numpy as np
 import nltk
 from flask import Flask, request, abort
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Download NLTK data (Required for Render)
 nltk.download('punkt')
 nltk.download('punkt_tab')
 
 app = Flask(__name__)
 
-# ==============================================================================
-# 1. LOAD MODEL (Updated for Root Directory)
-# ==============================================================================
-# Since you uploaded files to root, we look in the current directory (".")
+# Load Model
 MODEL_DIR = "." 
 model_path = os.path.join(MODEL_DIR, 'model.pkl')
 tfidf_path = os.path.join(MODEL_DIR, 'tfidf.pkl')
@@ -28,15 +26,18 @@ if os.path.exists(model_path) and os.path.exists(tfidf_path):
             model = pickle.load(f)
         with open(tfidf_path, 'rb') as f:
             vectorizer = pickle.load(f)
-        print("✅ Lightweight model loaded successfully!")
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-else:
-    print(f"⚠️ Warning: Model files not found. Expected 'model.pkl' and 'tfidf.pkl' in current folder.")
+        print(f"Error: {e}")
 
-# ==============================================================================
-# 2. HELPER FUNCTIONS
-# ==============================================================================
+# --- IMPROVED CLEANING ---
+def clean_text(text):
+    """Removes headers, page numbers, and artifacts."""
+    # Remove "Page X"
+    text = re.sub(r'Page \d+', '', text, flags=re.IGNORECASE)
+    # Remove section numbers like "2.3.1" at start of line
+    text = re.sub(r'^\d+(\.\d+)*\s*', '', text)
+    return text.strip()
+
 def extract_text_from_pdf(file_stream):
     text = ""
     try:
@@ -44,46 +45,62 @@ def extract_text_from_pdf(file_stream):
         for page in reader.pages:
             t = page.extract_text()
             if t: text += t + " "
-    except Exception as e:
-        print(f"PDF Error: {e}")
-        return ""
+    except: return ""
     return text
 
 def generate_extractive_summary(text, num_sentences=7):
-    if not model or not vectorizer:
-        return "Error: Model not active. Please check server logs."
+    if not model or not vectorizer: return "Model Error"
 
-    try:
-        sentences = nltk.sent_tokenize(text)
-    except:
-        return "Error processing text."
+    # 1. Split & Clean
+    raw_sentences = nltk.sent_tokenize(text)
+    clean_sentences = [clean_text(s) for s in raw_sentences]
+    
+    # Filter out short junk (headers/footers)
+    valid_sentences = []
+    original_indices = []
+    for i, s in enumerate(clean_sentences):
+        if len(s) > 40: # Ignore very short lines
+            valid_sentences.append(s)
+            original_indices.append(i)
 
-    if len(sentences) < 1:
-        return "No text found in document."
+    if not valid_sentences: return "No valid text found."
+
+    # 2. Predict Importance
+    features = vectorizer.transform(valid_sentences)
+    scores = model.predict_proba(features)[:, 1]
+
+    # 3. Smart Selection (Redundancy Removal)
+    ranked_indices = np.argsort(scores)[::-1] # Indices of best scores
     
-    try:
-        features = vectorizer.transform(sentences)
-        # Predict importance (Class 1)
-        scores = model.predict_proba(features)[:, 1]
-    except Exception as e:
-        return f"Prediction Error: {e}"
+    selected_indices = []
+    selected_vectors = []
     
-    # Sort by score (Highest Importance first)
-    ranked_sentences = sorted(
-        zip(range(len(sentences)), scores, sentences), 
-        key=lambda x: x[1], 
-        reverse=True
-    )
+    for idx in ranked_indices:
+        if len(selected_indices) >= num_sentences:
+            break
+            
+        # Check similarity to already selected sentences
+        current_vec = features[idx]
+        is_redundant = False
+        if selected_vectors:
+            # Calculate similarity with all currently selected
+            # Note: sparse matrix operation
+            sims = cosine_similarity(current_vec, np.vstack(selected_vectors))
+            if np.max(sims) > 0.65: # If >65% similar to an existing sentence, skip
+                is_redundant = True
+        
+        if not is_redundant:
+            selected_indices.append(idx)
+            selected_vectors.append(current_vec.toarray()[0])
+
+    # 4. Sort back by original order for flow
+    # We map back to the 'valid_sentences' list
+    final_sentences = sorted(selected_indices)
+    summary = " ".join([valid_sentences[i] for i in final_sentences])
     
-    # Keep top N and sort back to original order for readability
-    top_sentences = sorted(ranked_sentences[:num_sentences], key=lambda x: x[0])
-    
-    summary = " ".join([s[2] for s in top_sentences])
     return summary
 
-# ==============================================================================
-# 3. WEB INTERFACE
-# ==============================================================================
+# --- ROUTES (Same as before) ---
 @app.route('/', methods=['GET'])
 def index():
     return '''
@@ -92,27 +109,25 @@ def index():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PolicyBrief AI</title>
+    <title>PolicyBrief AI 2.0</title>
     <style>
-        :root { --primary: #2563EB; --bg: #F3F4F6; }
-        body { font-family: sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h1 { color: #1F2937; margin-bottom: 0.5rem; }
-        p { color: #6B7280; margin-bottom: 1.5rem; }
-        .upload-btn { border: 2px dashed #D1D5DB; padding: 2rem; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-        .upload-btn:hover { border-color: var(--primary); background: #EFF6FF; }
-        button { background: var(--primary); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: bold; margin-top: 1rem; cursor: pointer; width: 100%; }
-        button:hover { opacity: 0.9; }
+        :root { --primary: #0f766e; --bg: #f0fdfa; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 2.5rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 450px; text-align: center; }
+        h1 { color: var(--primary); margin-bottom: 0.5rem; }
+        .upload-area { border: 2px dashed #cbd5e1; padding: 2rem; border-radius: 12px; cursor: pointer; transition: 0.3s; margin: 1.5rem 0; }
+        .upload-area:hover { border-color: var(--primary); background: #ccfbf1; }
+        button { background: var(--primary); color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: 600; width: 100%; cursor: pointer; font-size: 1rem; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>PolicyBrief AI 🏥</h1>
-        <p>Upload a policy document to summarize.</p>
+        <h1>PolicyBrief AI 2.0 🧠</h1>
+        <p>Smart Extractive Summarization</p>
         <form action="/summarize" method="post" enctype="multipart/form-data">
-            <div class="upload-btn" onclick="document.getElementById('file').click()">
-                📂 Click to Upload PDF
-                <input type="file" name="file" id="file" accept=".pdf" style="display:none" required onchange="this.parentElement.style.borderColor='#2563EB'">
+            <div class="upload-area" onclick="document.getElementById('file').click()">
+                📂 Upload PDF Document
+                <input type="file" name="file" id="file" accept=".pdf" style="display:none" onchange="this.parentElement.style.borderColor='#0f766e'">
             </div>
             <button type="submit">Generate Summary</button>
         </form>
@@ -126,31 +141,16 @@ def summarize():
     if 'file' not in request.files: abort(400)
     file = request.files['file']
     if file.filename == "": abort(400)
-
+    
     text = extract_text_from_pdf(file.stream)
     summary = generate_extractive_summary(text)
-
+    
     return f'''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head> 
-        <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body {{ font-family: sans-serif; background: #F3F4F6; padding: 2rem; }}
-            .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-            h2 {{ color: #2563EB; border-bottom: 2px solid #E5E7EB; padding-bottom: 1rem; }}
-            p {{ line-height: 1.6; color: #374151; }}
-            a {{ display: inline-block; margin-top: 1rem; color: #2563EB; text-decoration: none; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2>📄 Summary Result</h2>
-            <p>{summary}</p>
-            <a href="/">← Summarize Another</a>
-        </div>
-    </body>
-    </html>
+    <div style="font-family: sans-serif; max-width: 800px; margin: 50px auto; padding: 40px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 20px rgba(0,0,0,0.08); line-height: 1.8; color: #334155;">
+        <h2 style="color: #0f766e; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">📄 Executive Summary</h2>
+        <p>{summary}</p>
+        <a href="/" style="display: inline-block; margin-top: 20px; color: #0f766e; font-weight: bold; text-decoration: none;">&larr; Analyze Another File</a>
+    </div>
     '''
 
 if __name__ == '__main__':
