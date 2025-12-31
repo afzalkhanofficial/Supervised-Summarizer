@@ -268,7 +268,7 @@ INDEX_HTML = """
     <div class="w-full h-full">
         <div class="grid grid-cols-[auto_1fr_auto] lg:grid-cols-3 items-center h-full">
             <div class="flex items-center h-full pl-6 lg:pl-8">
-                <a href="/" class="flex items-center space-x-2.5 mr-8 shrink-0">
+                <a href="https://afzalkhanofficial.github.io/Med-AI/index.html" class="flex items-center space-x-2.5 mr-8 shrink-0">
                     <div class="w-8 h-8 bg-white rounded-full relative overflow-hidden flex items-center justify-center">
                         <i class="fa-solid fa-staff-snake text-black text-lg"></i>
                     </div>
@@ -279,7 +279,7 @@ INDEX_HTML = """
                  <span class="text-afzal-purple font-mono text-xs uppercase tracking-widest border border-afzal-purple/30 bg-afzal-purple/10 px-3 py-1 rounded">Workspace : Supervised Text Summarization</span>
             </div>
             <div class="flex items-center justify-end h-full pr-6 lg:pr-8">
-                 <a href="#" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">About</a>
+                 <a href="https://afzalkhanofficial.github.io/Med-AI/about.html" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">About</a>
             </div>
         </div>
     </div>
@@ -292,7 +292,7 @@ INDEX_HTML = """
     <div class="max-w-4xl mx-auto px-4 text-center relative z-10 fade-up">
         <h1 class="text-5xl md:text-7xl font-semibold text-white mb-6 leading-tight tracking-tight">
             SUPERVISED <br>
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-afzal-purple via-white to-afzal-blue">Extractive Model</span>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-afzal-purple via-white to-afzal-blue">TF-IDF and Logistic Regression</span>
         </h1>
         <p class="text-xl text-gray-400 leading-relaxed max-w-2xl mx-auto font-light">
             Upload healthcare policy briefs. Our trained ML engine identifies key sentences, extracts entities, and generates structured summaries.
@@ -550,7 +550,7 @@ RESULT_HTML = """
                     </span>
                     {% else %}
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        SUPERVISED MODEL
+                        TF-IDF + Logistic Regression
                     </span>
                     {% endif %}
                 </div>
