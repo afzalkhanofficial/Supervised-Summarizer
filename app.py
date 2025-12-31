@@ -546,7 +546,7 @@ RESULT_HTML = """
                     </span>
                     {% if used_model == 'gemini' %}
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-afzal-purple/10 text-afzal-purple border border-afzal-purple/20">
-                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> GEMINI 2.5
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> TF-IDF + Logistic Regression
                     </span>
                     {% else %}
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-blue-500/10 text-blue-400 border border-blue-500/20">
